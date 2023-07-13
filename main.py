@@ -585,6 +585,7 @@ if __name__ == "__main__":
     #parser = Trainer.add_argparse_args(parser)
 
     opt, unknown = parser.parse_known_args()
+    unknown = dict(zip(unknown[:-1:2],unknown[1::2]))
     if opt.name and opt.resume:
         raise ValueError(
             "-n/--name and -r/--resume cannot be specified both."
@@ -629,21 +630,22 @@ if __name__ == "__main__":
     try:
         # init and save configs
         configs = [OmegaConf.load(cfg) for cfg in opt.base]
-        cli = OmegaConf.from_dotlist(unknown)
-        config = OmegaConf.merge(*configs, cli)
+        #cli = OmegaConf.from_dotlist(unknown)
+        config = OmegaConf.merge(*configs)
         lightning_config = config.pop("lightning", OmegaConf.create())
         # merge trainer cli with config
         trainer_config = lightning_config.get("trainer", OmegaConf.create())
         # default to ddp
-        trainer_config["accelerator"] = "ddp"
-        trainer_config["gpus"] = opt.gpus
+        trainer_config["strategy"] = "ddp"
+        trainer_config["accelerator"] = "gpu"
+        trainer_config["devices"] = unknown['--gpus']
         for k in nondefault_trainer_args(opt):
             trainer_config[k] = getattr(opt, k)
-        if not "gpus" in trainer_config:
+        if not "devices" in trainer_config:
             del trainer_config["accelerator"]
             cpu = True
         else:
-            gpuinfo = trainer_config["gpus"]
+            gpuinfo = trainer_config["devices"]
             print(f"Running on GPUs {gpuinfo}")
             cpu = False
         trainer_opt = argparse.Namespace(**trainer_config)
@@ -806,7 +808,8 @@ if __name__ == "__main__":
         # configure learning rate
         bs, base_lr = config.data.params.batch_size, config.model.base_learning_rate
         if not cpu:
-            ngpu = len(lightning_config.trainer.gpus.strip(",").split(','))
+            #ngpu = len(lightning_config.trainer.gpus.strip(",").split(','))
+            ngpu = len(trainer_opt.devices.strip(",").split(','))
         else:
             ngpu = 1
         if 'accumulate_grad_batches' in lightning_config.trainer:
