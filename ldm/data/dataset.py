@@ -1,10 +1,10 @@
 import os
 from torch.utils.data import Dataset
 import pandas as pd
-from data.base import ImagePaths, ConcatDatasetWithIndex
+from ldm.data.base import ImagePaths, ConcatDatasetWithIndex
 import numpy as np
 
-ROOT = "/data/datasets/users/subhash/"
+ROOT = "/blue/parisa.rashidi/subhashnerella/Datasets/"
 
 
 class FacesBase(Dataset):
@@ -24,59 +24,59 @@ class FacesBase(Dataset):
 class BP4DTrain(FacesBase):
     def __init__(self,aus,size=225,mcManager=None):
         super().__init__()
-        df = pd.read_csv(os.path.join('data/datafiles/bp4d.csv'))
+        df = pd.read_csv(os.path.join('ldm/data/datafiles/bp4d.csv'))
         df = helper_split_func(df)
         relpaths = df['path'].values
         landmark_paths = df['landmark_path'].values
         paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
         landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
         aus_df = helper_AU_func(df,aus)
-        aus = aus_df[aus].to_numpy()
-        labels={'aus':aus}
-        self.data = ImagePaths(paths,landmark_paths,labels,size,mcManager)
+        au_labels = aus_df[aus].to_numpy()
+        labels={'aus':au_labels }
+        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
 
 class BP4DVal(FacesBase):
     def __init__(self,aus,size=225,mcManager=None):
         super().__init__(size)
-        df = pd.read_csv(os.path.join('data/datafiles/bp4d.csv'))
+        df = pd.read_csv(os.path.join('ldm/data/datafiles/bp4d.csv'))
         df = helper_split_func(df,split='val')
         relpaths = df['path'].values
         landmark_paths = df['landmark_path'].values
         paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
         landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
         aus_df = helper_AU_func(df,aus)
-        aus = aus_df[aus].to_numpy()
-        labels={'aus':aus}
-        self.data = ImagePaths(paths,landmark_paths,labels,size,mcManager)
+        au_labels = aus_df[aus].to_numpy()
+        labels={'aus':au_labels }
+        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
 
 class DISFATrain(FacesBase):
     def __init__(self,aus,size=225,mcManager=None):
         super().__init__(size)
-        df = pd.read_csv(os.path.join('data/datafiles/disfa.csv'))
+        df = pd.read_csv(os.path.join('ldm/data/datafiles/disfa.csv'))
         df = helper_split_func(df)
         relpaths = df['path'].values
         landmark_paths = df['landmark_path'].values
         paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
         landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
         aus_df = helper_AU_func(df,aus)
-        aus = aus_df[aus].to_numpy()
-        labels={'aus':aus}
-        self.data = ImagePaths(paths,landmark_paths,labels,size,mcManager)
+        au_labels = aus_df[aus].to_numpy()
+        labels={'aus':au_labels }
+        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
 
 
 class DISFAVal(FacesBase):
     def __init__(self,aus,size=225,mcManager=None):
         super().__init__(size)
-        df = pd.read_csv(os.path.join('data/datafiles/disfa.csv'))
+        df = pd.read_csv(os.path.join('ldm/data/datafiles/disfa.csv'))
         df = helper_split_func(df,split='val')
         relpaths = df['path'].values
         landmark_paths = df['landmark_path'].values
         paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
         landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
         aus_df = helper_AU_func(df,aus)
-        aus = aus_df[aus].to_numpy()
-        labels={'aus':aus}
-        self.data = ImagePaths(paths,landmark_paths,labels,size,mcManager)
+        au_labels = aus_df[aus].to_numpy()
+        labels={'aus':au_labels }
+        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
 
 
 class MultiDatasetTrain(Dataset):
@@ -130,9 +130,11 @@ def helper_split_func(df:pd.DataFrame,split:str = 'train')->pd.DataFrame:
     np.random.seed(42)
     participants = df['participant'].unique()
     participants = np.random.choice(participants,size=int(len(participants)*0.75),replace=False)
-    print(np.sort(participants))
+    
     if split == 'train':
         df = df[df['participant'].isin(participants)]
+        print(np.sort(df.participant.unique().tolist()))
     else:
         df = df[~df['participant'].isin(participants)]
+        print(np.sort(df.participant.unique().tolist()))
     return df
