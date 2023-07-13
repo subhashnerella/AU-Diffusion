@@ -16,12 +16,17 @@ from pytorch_lightning.trainer import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, Callback, LearningRateMonitor
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 from pytorch_lightning.utilities import rank_zero_info
-from pytorch_lightning.plugins import DDPPlugin
 
-from torchmetrics.image.fid import FID
-from torchmetrics.image.inception import IS
-from torchmetrics.image.psnr import PSNR
-from torchmetrics.image.ssim import SSIM
+
+# from torchmetrics.image.fid import FID
+# from torchmetrics.image.inception import IS
+# from torchmetrics.image.psnr import PSNR
+# from torchmetrics.image.ssim import SSIM
+
+from torchmetrics.image.fid import FrechetInceptionDistance
+from torchmetrics.image.inception import InceptionScore
+from torchmetrics.image.psnr import PeakSignalNoiseRatio
+from torchmetrics.image.ssim import StructuralSimilarityIndexMeasure
 from einops import rearrange
 
 from ldm.data.base import Txt2ImgIterableBaseDataset
@@ -132,7 +137,7 @@ def get_parser(**parser_kwargs):
 
 def nondefault_trainer_args(opt):
     parser = argparse.ArgumentParser()
-    parser = Trainer.add_argparse_args(parser)
+    #parser = Trainer.add_argparse_args(parser)
     args = parser.parse_args([])
     return sorted(k for k in vars(args) if getattr(opt, k) != getattr(args, k))
 
@@ -305,10 +310,10 @@ class MetricLogger(Callback):
                                  'plot_diffusion_rows':False,
                                  'sample':False,
                                  }
-        self.fid = FID(feature=64)
-        self.inception = IS(feature=64)
-        self.psnr = PSNR()
-        self.ssim = SSIM()
+        self.fid = FrechetInceptionDistance(feature=64)
+        self.inception = InceptionScore(feature=64)
+        self.psnr = PeakSignalNoiseRatio()
+        self.ssim = StructuralSimilarityIndexMeasure()
         self.cutoff_batch = int(num_imgs // (batch_size * num_gpu_workers))
         self.batch_size = batch_size
 
@@ -405,7 +410,7 @@ class ImageLogger(Callback):
         self.batch_freq = batch_frequency
         self.max_images = max_images
         self.logger_log_images = {
-            pl.loggers.TestTubeLogger: self._testtube,
+            pl.loggers.tensorboard.TensorBoardLogger: self._tensorboard,
         }
         # self.log_steps = [2 ** n for n in range(int(np.log2(self.batch_freq)) + 1)]
         # if not increase_log_steps:
@@ -417,7 +422,7 @@ class ImageLogger(Callback):
         self.log_first_step = log_first_step
 
     @rank_zero_only
-    def _testtube(self, pl_module, images, batch_idx, split):
+    def _tensorboard(self, pl_module, images, batch_idx, split):
         for k in images:
             grid = torchvision.utils.make_grid(images[k])
             grid = (grid + 1.0) / 2.0  # -1,1 -> 0,1; c,h,w
@@ -577,7 +582,7 @@ if __name__ == "__main__":
     sys.path.append(os.getcwd())
 
     parser = get_parser()
-    parser = Trainer.add_argparse_args(parser)
+    #parser = Trainer.add_argparse_args(parser)
 
     opt, unknown = parser.parse_known_args()
     if opt.name and opt.resume:
@@ -631,6 +636,7 @@ if __name__ == "__main__":
         trainer_config = lightning_config.get("trainer", OmegaConf.create())
         # default to ddp
         trainer_config["accelerator"] = "ddp"
+        trainer_config["gpus"] = opt.gpus
         for k in nondefault_trainer_args(opt):
             trainer_config[k] = getattr(opt, k)
         if not "gpus" in trainer_config:
@@ -667,8 +673,15 @@ if __name__ == "__main__":
                     "save_dir": logdir,
                 }
             },
+            "tensorboard": {
+                "target": "pytorch_lightning.loggers.TensorBoardLogger",
+                "params": {
+                    "name": nowname,
+                    "save_dir": logdir,
+                }
+            }
         }
-        default_logger_cfg = default_logger_cfgs["testtube"]
+        default_logger_cfg = default_logger_cfgs["tensorboard"]
         if "logger" in lightning_config:
             logger_cfg = lightning_config.logger
         else:
@@ -775,8 +788,8 @@ if __name__ == "__main__":
             del callbacks_cfg['ignore_keys_callback']
 
         trainer_kwargs["callbacks"] = [instantiate_from_config(callbacks_cfg[k]) for k in callbacks_cfg]
-        trainer_kwargs["plugins"] = DDPPlugin(find_unused_parameters=False)
-        trainer = Trainer.from_argparse_args(trainer_opt, **trainer_kwargs)
+        trainer = Trainer(**{**vars(trainer_opt), **trainer_kwargs})
+        #trainer = Trainer.from_argparse_args(trainer_opt, **trainer_kwargs)
         trainer.logdir = logdir  ###
 
         # data
