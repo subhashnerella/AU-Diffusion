@@ -322,7 +322,7 @@ class PeriodicSave(Callback):
 
     @rank_zero_only
     def log_local(self, save_dir, split, images, current_epoch, batch_idx):
-        root = os.path.join(save_dir, "ImagesforMetrics", split)
+        root = os.path.join(save_dir, "ImagesforMetrics", split, "epoch{:03d}".format(current_epoch))
         for k in images:
             imgs = images[k]
             imgs = self.rescale(imgs)
@@ -337,7 +337,7 @@ class PeriodicSave(Callback):
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         if self.check_batch(batch_idx) and not trainer.running_sanity_check:
-            images = pl_module.log_images(batch, trainer, **self.log_images_kwargs)
+            images = pl_module.log_images(batch, **self.log_images_kwargs)
             for k in images:
                 imgs = pl_module.all_gather(images[k])
                 imgs = rearrange(imgs, 'n b c h w -> (n b) c h w')
@@ -347,7 +347,7 @@ class PeriodicSave(Callback):
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         if self.check_batch(batch_idx):
-            images = pl_module.log_images(batch, trainer, **self.log_images_kwargs)
+            images = pl_module.log_images(batch, **self.log_images_kwargs)
             for k in images:  
                 imgs = pl_module.all_gather(images[k])
                 imgs = rearrange(imgs, 'n b c h w -> (n b) c h w')
