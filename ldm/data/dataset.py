@@ -166,5 +166,6 @@ def helper_split_func(df:pd.DataFrame,split:str = 'train')->pd.DataFrame:
         print(np.sort(df.participant.unique().tolist()))
     else:
         df = df[~df['participant'].isin(participants)]
+        df = df.sample(frac=1)
         print(np.sort(df.participant.unique().tolist()))
     return df

@@ -74,11 +74,10 @@ data:
   params:
     batch_size: 10
     num_workers: 6
-    shuffle_val_dataloader: True
     train:
       target: ldm.data.dataset.MultiDatasetTrain
       params:
-        datasets: ['BP4D', 'DISFA']
+        datasets: ['BP4D', 'DISFA','UNBC']
         aus: ['AU1', 'AU2', 'AU4', 'AU6', 'AU7', 'AU9', 'AU10','AU12', 'AU14', 'AU15', 'AU17','AU20', 'AU23', 'AU24', 'AU25','AU26','AU27','AU43']
         size: 256
         mcManager: True
@@ -86,7 +85,7 @@ data:
     validation:
       target: ldm.data.dataset.MultiDatasetVal
       params:
-        datasets: ['BP4D', 'DISFA']
+        datasets: ['BP4D', 'DISFA', 'UNBC']
         aus: ['AU1', 'AU2', 'AU4', 'AU6', 'AU7', 'AU9', 'AU10','AU12', 'AU14', 'AU15', 'AU17','AU20', 'AU23', 'AU24', 'AU25','AU26','AU27','AU43']
         size: 256
         mcManager: True
