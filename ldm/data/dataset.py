@@ -78,11 +78,40 @@ class DISFAVal(FacesBase):
         labels={'aus':au_labels }
         self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
 
+class UNBCTrain(FacesBase):
+    def __init__(self, aus,size=225, mcManager=None):
+        super().__init__(size)
+        df  = pd.read_csv(os.path.join('ldm/data/datafiles/unbc.csv'))
+        df = helper_split_func(df)
+        relpaths = df['path'].values
+        landmark_paths = df['landmark_path'].values
+        paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
+        landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
+        aus_df = helper_AU_func(df,aus)
+        au_labels = aus_df[aus].to_numpy()
+        labels={'aus':au_labels }
+        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
+
+class UNBCVal(FacesBase):
+    def __init__(self, aus,size=225, mcManager=None):
+        super().__init__(size)
+        df  = pd.read_csv(os.path.join('ldm/data/datafiles/unbc.csv'))
+        df = helper_split_func(df,split='val')
+        relpaths = df['path'].values
+        landmark_paths = df['landmark_path'].values
+        paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
+        landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
+        aus_df = helper_AU_func(df,aus)
+        au_labels = aus_df[aus].to_numpy()
+        labels={'aus':au_labels }
+        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
+
 
 class MultiDatasetTrain(Dataset):
     def __init__(self, datasets,aus, size=225,mcManager=None):
         dataset_classes = {'BP4D': BP4DTrain,
-                           'DISFA': DISFATrain}
+                           'DISFA': DISFATrain,
+                           'UNBC': UNBCTrain}
         dataset = []
         for d in datasets:
             dataset.append(dataset_classes[d](aus,size=size,mcManager=mcManager))
@@ -100,7 +129,8 @@ class MultiDatasetTrain(Dataset):
 class MultiDatasetVal(Dataset):
     def __init__(self, datasets,aus, size=225,mcManager=None):
         dataset_classes = {'BP4D': BP4DVal,
-                           'DISFA': DISFAVal}
+                           'DISFA': DISFAVal,
+                           'UNBC': UNBCVal}
         dataset = []
         for d in datasets:
             dataset.append(dataset_classes[d](aus,size=size,mcManager=mcManager))
