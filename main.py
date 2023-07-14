@@ -789,7 +789,7 @@ if __name__ == "__main__":
             "PeriodicSave": {
                 "target": "main.PeriodicSave",
                 "params": {
-                    "batch_size": 10,
+                    "batch_size": 12,
                     "num_gpu_workers": len(trainer_config["gpus"].strip(",").split(",")),
                     "num_imgs": 5000
                 }
