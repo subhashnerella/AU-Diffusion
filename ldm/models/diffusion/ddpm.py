@@ -1257,7 +1257,7 @@ class LatentDiffusion(DDPM):
     @torch.no_grad()
     def log_images(self, batch, N=8, n_row=4, sample=True, ddim_steps=200, ddim_eta=1., return_keys=None,
                    quantize_denoised=True, inpaint=True, plot_denoise_rows=False, plot_progressive_rows=True,
-                   plot_diffusion_rows=True,img2img=True, **kwargs):
+                   plot_diffusion_rows=True,img2img=True, reconstruction=True,  **kwargs):
 
         use_ddim = ddim_steps is not None
 
@@ -1271,8 +1271,10 @@ class LatentDiffusion(DDPM):
         n_row = min(x.shape[0], n_row)
         log["inputs"] = x
 
+        if reconstruction:
+            log["reconstruction"] = xrec
 
-        log["reconstruction"] = xrec
+            
         if self.model.conditioning_key is not None:
             if hasattr(self.cond_stage_model, "decode"):
                 xc = self.cond_stage_model.decode(c)

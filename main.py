@@ -292,6 +292,69 @@ class SetupCallback(Callback):
                 except FileNotFoundError:
                     pass
 
+class PeriodicSave(Callback):
+    def __init__(self,  num_gpu_workers, batch_size=8, num_imgs=5000):
+        super().__init__()
+        self.log_images_kwargs= {'N':batch_size,
+                                 'inpaint':False,
+                                 'plot_denoise_rows':False,
+                                 'plot_progressive_rows':False,
+                                 'img2img':True,
+                                 'quantize_denoised':False,
+                                 'plot_diffusion_rows':False,
+                                 'sample':False,
+                                  'reconstruction':False
+                                 }
+        self.cutoff_batch = int(num_imgs // (batch_size * num_gpu_workers))
+        self.batch_size = batch_size
+
+    def check_batch(self, batch_idx):
+        return batch_idx < self.cutoff_batch
+    
+    def rescale(self, x):
+        #rescale and convert to unit8
+        x = (x + 1.0) / 2.0  # -1,1 -> 0,1; c,h,w
+        x = x * 255
+        x = x.clamp(0, 255)
+        x = x.type(torch.uint8)
+        return x
+    
+
+    @rank_zero_only
+    def log_local(self, save_dir, split, images, current_epoch, batch_idx):
+        root = os.path.join(save_dir, "ImagesforMetrics", split)
+        for k in images:
+            imgs = images[k]
+            imgs = self.rescale(imgs)
+            for i, img in enumerate(imgs):
+                img = img.permute(1, 2, 0)
+                img = img.detach().cpu().numpy()
+                fname = "{}_e{:03d}_b{:05d}_i{:02d}.png".format(k, current_epoch, batch_idx, i)
+                path = os.path.join(root, fname)
+                os.makedirs(os.path.split(path)[0], exist_ok=True)
+                Image.fromarray(img).save(path)
+
+
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        if self.check_batch(batch_idx) and not trainer.running_sanity_check:
+            images = pl_module.log_images(batch, trainer, **self.log_images_kwargs)
+            for k in images:
+                imgs = pl_module.all_gather(images[k])
+                imgs = rearrange(imgs, 'n b c h w -> (n b) c h w')
+                images[k] = imgs
+            self.log_local(trainer.log_dir, "val", images, trainer.current_epoch, batch_idx)
+    
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        if self.check_batch(batch_idx):
+            images = pl_module.log_images(batch, trainer, **self.log_images_kwargs)
+            for k in images:  
+                imgs = pl_module.all_gather(images[k])
+                imgs = rearrange(imgs, 'n b c h w -> (n b) c h w')
+                images[k] = imgs
+            self.log_local(trainer.log_dir, "train", images, trainer.current_epoch, batch_idx)
+
+                  
 
 class MetricLogger(Callback):
     def __init__(self,  num_gpu_workers,batch_size=8, num_imgs=5000):
@@ -723,11 +786,11 @@ if __name__ == "__main__":
                     "clamp": True
                 }
             },
-            "metric_logger": {
-                "target": "main.MetricLogger",
+            "PeriodicSave": {
+                "target": "main.PeriodicSave",
                 "params": {
                     "batch_size": 10,
-                    "num_gpu_workers": 4,
+                    "num_gpu_workers": len(trainer_config["gpus"].strip(",").split(",")),
                     "num_imgs": 5000
                 }
             },
