@@ -21,33 +21,36 @@ class FacesBase(Dataset):
         sample = self.data[idx]
         return sample
 
-class BP4DTrain(FacesBase):
-    def __init__(self,aus,size=225,mcManager=None):
+class BP4D(FacesBase):
+    def __init__(self,aus,split=None,size=225,mcManager=None):
         super().__init__()
-        df = pd.read_csv(os.path.join('ldm/data/datafiles/bp4d.csv'))
-        df = helper_split_func(df)
+        df = pd.read_csv(os.path.join('data/datafiles/bp4d.csv'))
+        if split is not None:
+            df = helper_split_func(df,split=split)
         relpaths = df['path'].values
         landmark_paths = df['landmark_path'].values
         paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
         landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
         aus_df = helper_AU_func(df,aus)
         au_labels = aus_df[aus].to_numpy()
-        labels={'aus':au_labels }
-        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
+        labels={'aus':au_labels, 'dataset':'BP4D' }
+        self.data = ImagePaths(paths,aus,landmark_paths,labels,size,mcManager)
 
-class BP4DVal(FacesBase):
-    def __init__(self,aus,size=225,mcManager=None):
-        super().__init__(size)
-        df = pd.read_csv(os.path.join('ldm/data/datafiles/bp4d.csv'))
-        df = helper_split_func(df,split='val')
+class BP4DPlus(FacesBase):
+    def __init__(self,aus,split=None,size=225,mcManager=None):
+        super().__init__()
+        df = pd.read_csv(os.path.join('data/datafiles/bp4dplus.csv'))
+        if split is not None:
+            df = helper_split_func(df,split=split)
         relpaths = df['path'].values
         landmark_paths = df['landmark_path'].values
         paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
         landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
         aus_df = helper_AU_func(df,aus)
         au_labels = aus_df[aus].to_numpy()
-        labels={'aus':au_labels }
-        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
+        labels={'aus':au_labels, 'dataset':'BP4DPlus' }
+        self.data = ImagePaths(paths,aus,landmark_paths,labels,size,mcManager)
+
 
 class DISFATrain(FacesBase):
     def __init__(self,aus,size=225,mcManager=None):
@@ -124,6 +127,7 @@ def helper_AU_func(df:pd.DataFrame,aus:list)->pd.DataFrame:
     # Add absent AUs fillled with -1
     for au in absent_aus:
         au_df[au] = -1
+    au_df = au_df[aus]
     return au_df
         
 def helper_split_func(df:pd.DataFrame,split:str = 'train')->pd.DataFrame:

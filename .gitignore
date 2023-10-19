@@ -44,6 +44,12 @@ outputs/
 .neptune/
 .git/
 
+#cmd line log
+*.txt
+
+#env yaml
+*.yaml
+
 #weights and checkpoints
 **/*.ckpt
 **/*.pth
