@@ -38,10 +38,10 @@ class ImagePaths(Dataset):
             mcManager = MCManager()
         self._aligner = FaceAlign(size,mcManager=mcManager)
 
-        if self.size is not None and self.size > 0:
-            self.rescaler = albumentations.SmallestMaxSize(max_size = self.size)
-            self.cropper = albumentations.CenterCrop(height=self.size,width=self.size)
-            self.preprocessor = albumentations.Compose([self.rescaler,self.cropper])
+        # if self.size is not None and self.size > 0:
+        #     self.rescaler = albumentations.SmallestMaxSize(max_size = self.size)
+        #     self.cropper = albumentations.CenterCrop(height=self.size,width=self.size)
+        #     self.preprocessor = albumentations.Compose([self.rescaler,self.cropper])
 
     def __len__(self):
         return self._length
