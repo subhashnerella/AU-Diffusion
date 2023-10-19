@@ -60,5 +60,7 @@ outputs/
 #run logs
 *.txt
 
+#env yaml
+*.yaml
 
 

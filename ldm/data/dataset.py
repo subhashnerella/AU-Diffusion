@@ -21,100 +21,77 @@ class FacesBase(Dataset):
         sample = self.data[idx]
         return sample
 
-class BP4DTrain(FacesBase):
-    def __init__(self,aus,size=225,mcManager=None):
+
+class BP4D(FacesBase):
+    def __init__(self,aus,split=None,size=225,mcManager=None):
         super().__init__()
-        df = pd.read_csv(os.path.join('ldm/data/datafiles/bp4d.csv'))
-        df = helper_split_func(df)
+        df = pd.read_csv(os.path.join('data/datafiles/bp4d.csv'))
+        if split is not None:
+            df = helper_split_func(df,split=split)
         relpaths = df['path'].values
         landmark_paths = df['landmark_path'].values
         paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
         landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
         aus_df = helper_AU_func(df,aus)
         au_labels = aus_df[aus].to_numpy()
-        labels={'aus':au_labels }
-        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
+        labels={'aus':au_labels, 'dataset':'BP4D' }
+        self.data = ImagePaths(paths,aus,landmark_paths,labels,size,mcManager)
 
-class BP4DVal(FacesBase):
-    def __init__(self,aus,size=225,mcManager=None):
-        super().__init__(size)
-        df = pd.read_csv(os.path.join('ldm/data/datafiles/bp4d.csv'))
-        df = helper_split_func(df,split='val')
+class BP4DPlus(FacesBase):
+    def __init__(self,aus,split=None,size=225,mcManager=None):
+        super().__init__()
+        df = pd.read_csv(os.path.join('data/datafiles/bp4dplus.csv'))
+        if split is not None:
+            df = helper_split_func(df,split=split)
         relpaths = df['path'].values
         landmark_paths = df['landmark_path'].values
         paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
         landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
         aus_df = helper_AU_func(df,aus)
         au_labels = aus_df[aus].to_numpy()
-        labels={'aus':au_labels }
-        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
+        labels={'aus':au_labels, 'dataset':'BP4DPlus' }
+        self.data = ImagePaths(paths,aus,landmark_paths,labels,size,mcManager)
 
-class DISFATrain(FacesBase):
-    def __init__(self,aus,size=225,mcManager=None):
-        super().__init__(size)
-        df = pd.read_csv(os.path.join('ldm/data/datafiles/disfa.csv'))
-        df = helper_split_func(df)
+class DISFA(FacesBase):
+    def __init__(self,aus,split=None,size=225,mcManager=None):
+        super().__init__()
+        df = pd.read_csv(os.path.join('data/datafiles/disfa.csv'))
+        if split is not None:
+            df = helper_split_func(df,split=split)
         relpaths = df['path'].values
         landmark_paths = df['landmark_path'].values
         paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
         landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
         aus_df = helper_AU_func(df,aus)
         au_labels = aus_df[aus].to_numpy()
-        labels={'aus':au_labels }
-        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
+        labels={'aus':au_labels, 'dataset':'DISFA' }
+        self.data = ImagePaths(paths,aus,landmark_paths,labels,size,mcManager)
 
 
-class DISFAVal(FacesBase):
-    def __init__(self,aus,size=225,mcManager=None):
-        super().__init__(size)
-        df = pd.read_csv(os.path.join('ldm/data/datafiles/disfa.csv'))
-        df = helper_split_func(df,split='val')
+class UNBC(FacesBase):
+    def __init__(self,aus,split=None,size=225,mcManager=None):
+        super().__init__()
+        df = pd.read_csv(os.path.join('data/datafiles/unbc.csv'))
+        if split is not None:
+            df = helper_split_func(df,split=split)
         relpaths = df['path'].values
         landmark_paths = df['landmark_path'].values
         paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
         landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
         aus_df = helper_AU_func(df,aus)
         au_labels = aus_df[aus].to_numpy()
-        labels={'aus':au_labels }
-        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
-
-class UNBCTrain(FacesBase):
-    def __init__(self, aus,size=225, mcManager=None):
-        super().__init__(size)
-        df  = pd.read_csv(os.path.join('ldm/data/datafiles/unbc.csv'))
-        df = helper_split_func(df)
-        relpaths = df['path'].values
-        landmark_paths = df['landmark_path'].values
-        paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
-        landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
-        aus_df = helper_AU_func(df,aus)
-        au_labels = aus_df[aus].to_numpy()
-        labels={'aus':au_labels }
-        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
-
-class UNBCVal(FacesBase):
-    def __init__(self, aus,size=225, mcManager=None):
-        super().__init__(size)
-        df  = pd.read_csv(os.path.join('ldm/data/datafiles/unbc.csv'))
-        df = helper_split_func(df,split='val')
-        relpaths = df['path'].values
-        landmark_paths = df['landmark_path'].values
-        paths = list(map(lambda x: os.path.join(ROOT,x),relpaths))
-        landmark_paths = list(map(lambda x: os.path.join(ROOT,x),landmark_paths))
-        aus_df = helper_AU_func(df,aus)
-        au_labels = aus_df[aus].to_numpy()
-        labels={'aus':au_labels }
-        self.data = ImagePaths(paths,landmark_paths,aus,labels,size,mcManager)
+        labels={'aus':au_labels, 'dataset':'UNBC' }
+        self.data = ImagePaths(paths,aus,landmark_paths,labels,size,mcManager)
 
 
-class MultiDatasetTrain(Dataset):
-    def __init__(self, datasets,aus, size=225,mcManager=None):
-        dataset_classes = {'BP4D': BP4DTrain,
-                           'DISFA': DISFATrain,
-                           'UNBC': UNBCTrain}
+class MultiDataset(Dataset):
+    def __init__(self, datasets,aus,split=None,size=225,mcManager=None):
+        dataset_classes = {'BP4D': BP4D,
+                           'DISFA': DISFA,
+                           'UNBC': UNBC}
         dataset = []
         for d in datasets:
-            dataset.append(dataset_classes[d](aus,size=size,mcManager=mcManager))
+            dataset.append(dataset_classes[d](aus,split,size=size,mcManager=mcManager))
         self.dataset = ConcatDatasetWithIndex(dataset)
 
     def __len__(self):
@@ -125,24 +102,6 @@ class MultiDatasetTrain(Dataset):
         sample['dataset_label'] = dataset_label
         return sample
     
-
-class MultiDatasetVal(Dataset):
-    def __init__(self, datasets,aus, size=225,mcManager=None):
-        dataset_classes = {'BP4D': BP4DVal,
-                           'DISFA': DISFAVal,
-                           'UNBC': UNBCVal}
-        dataset = []
-        for d in datasets:
-            dataset.append(dataset_classes[d](aus,size=size,mcManager=mcManager))
-        self.dataset = ConcatDatasetWithIndex(dataset)
-
-    def __len__(self):
-        return len(self.dataset)
-    
-    def __getitem__(self, idx):
-        sample,dataset_label = self.dataset[idx]
-        sample['dataset_label'] = dataset_label
-        return sample
 
 
 def helper_AU_func(df:pd.DataFrame,aus:list)->pd.DataFrame:
@@ -154,6 +113,7 @@ def helper_AU_func(df:pd.DataFrame,aus:list)->pd.DataFrame:
     # Add absent AUs fillled with -1
     for au in absent_aus:
         au_df[au] = -1
+    au_df = au_df[aus]
     return au_df
         
 def helper_split_func(df:pd.DataFrame,split:str = 'train')->pd.DataFrame:
