@@ -52,18 +52,18 @@ class ImagePaths(Dataset):
             image = image.convert("RGB")
         image = np.array(image).astype(np.uint8)
         landmarks = np.load(landmark_path)
-        image,landmarks = self._aligner(image,landmarks=landmarks,image_path=image_path)
-        image = self.preprocessor(image=image)["image"]
+        image = self._aligner(image,landmarks=landmarks,image_path=image_path)
+        #image = self.preprocessor(image=image)["image"]
         image = (image/127.5 - 1.0).astype(np.float32)
-        return image, landmarks
+        return image
 
     def __getitem__(self, i):
         sample = dict()
         #sample["image"],sample['landmarks'] = self.preprocess_image(self.keys["file_path_"][i],self.keys["landmark_path_"][i])
-        sample["image"],_ = self.preprocess_image(self.keys["file_path_"][i],self.keys["landmark_path_"][i])
+        sample["image"] = self.preprocess_image(self.keys["file_path_"][i],self.keys["landmark_path_"][i])
         for k in self.keys:
             #sample[k] = self.keys[k][i]
-            if k == "aus":
+            if k == "aus" :
                 sample[k] = self.keys[k][i]
                 #get where the aus are 1
                 inds = np.where(sample[k] == 1)[0]
@@ -71,6 +71,10 @@ class ImagePaths(Dataset):
                     sample["aus_humanlabel"] = (',').join([self.aus[ind] for ind in inds])
                 else:
                     sample["aus_humanlabel"] = ''
+            elif k == "file_path_" :
+                sample[k] = self.keys[k][i]
+            else:
+                continue
         return sample
     
 
@@ -85,7 +89,7 @@ class FaceAlign():
         key = image_path
         if self.mcManager is not None and key  in self.mcManager:
             result = self.mcManager.get(key)
-            landmarks = np.array(result['landmarks'])
+            #landmarks = np.array(result['landmarks'])
             mat = np.array(result['affine_mat'])
             aligned_img = cv2.warpAffine(img, mat[0:2, :], (self.size, self.size), cv2.INTER_LINEAR, borderValue=(128, 128, 128))
         else:  
@@ -117,17 +121,17 @@ class FaceAlign():
             mat3 = np.mat([[scale, 0, scale * (halfSize - cx)], [0, scale, scale * (halfSize - cy)], [0, 0, 1]])
             mat = mat3 * mat1
             aligned_img = cv2.warpAffine(img, mat[0:2, :], (self.size, self.size), cv2.INTER_LINEAR, borderValue=(128, 128, 128))
-            land_3d = np.ones((landmarks.shape[0]+1,landmarks.shape[1]))
-            land_3d[:-1,:] = landmarks
-            landmarks = (mat*land_3d)[:-1]
-            landmarks = np.asarray(landmarks).round()
+            # land_3d = np.ones((landmarks.shape[0]+1,landmarks.shape[1]))
+            # land_3d[:-1,:] = landmarks
+            # landmarks = (mat*land_3d)[:-1]
+            # landmarks = np.asarray(landmarks).round()
             if self.mcManager is not None:
                 try:
-                    save_dict={'landmarks':landmarks,'affine_mat':mat}
+                    save_dict={'affine_mat':mat}
                     self.mcManager.set(key,save_dict)
                 except Exception:
                     pass
-        return aligned_img,landmarks
+        return aligned_img
     
 
 

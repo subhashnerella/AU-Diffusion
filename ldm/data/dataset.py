@@ -25,7 +25,7 @@ class FacesBase(Dataset):
 class BP4D(FacesBase):
     def __init__(self,aus,split=None,size=225,mcManager=None):
         super().__init__()
-        df = pd.read_csv(os.path.join('data/datafiles/bp4d.csv'))
+        df = pd.read_csv(os.path.join('ldm/data/datafiles/bp4d.csv'))
         if split is not None:
             df = helper_split_func(df,split=split)
         relpaths = df['path'].values
@@ -40,7 +40,7 @@ class BP4D(FacesBase):
 class BP4DPlus(FacesBase):
     def __init__(self,aus,split=None,size=225,mcManager=None):
         super().__init__()
-        df = pd.read_csv(os.path.join('data/datafiles/bp4dplus.csv'))
+        df = pd.read_csv(os.path.join('ldm/data/datafiles/bp4d+.csv'))
         if split is not None:
             df = helper_split_func(df,split=split)
         relpaths = df['path'].values
@@ -55,7 +55,7 @@ class BP4DPlus(FacesBase):
 class DISFA(FacesBase):
     def __init__(self,aus,split=None,size=225,mcManager=None):
         super().__init__()
-        df = pd.read_csv(os.path.join('data/datafiles/disfa.csv'))
+        df = pd.read_csv(os.path.join('ldm/data/datafiles/disfa.csv'))
         if split is not None:
             df = helper_split_func(df,split=split)
         relpaths = df['path'].values
@@ -71,7 +71,7 @@ class DISFA(FacesBase):
 class UNBC(FacesBase):
     def __init__(self,aus,split=None,size=225,mcManager=None):
         super().__init__()
-        df = pd.read_csv(os.path.join('data/datafiles/unbc.csv'))
+        df = pd.read_csv(os.path.join('ldm/data/datafiles/unbc.csv'))
         if split is not None:
             df = helper_split_func(df,split=split)
         relpaths = df['path'].values
@@ -88,7 +88,8 @@ class MultiDataset(Dataset):
     def __init__(self, datasets,aus,split=None,size=225,mcManager=None):
         dataset_classes = {'BP4D': BP4D,
                            'DISFA': DISFA,
-                           'UNBC': UNBC}
+                           'UNBC': UNBC,
+                           'BP4DPlus': BP4DPlus}
         dataset = []
         for d in datasets:
             dataset.append(dataset_classes[d](aus,split,size=size,mcManager=mcManager))
@@ -113,7 +114,7 @@ def helper_AU_func(df:pd.DataFrame,aus:list)->pd.DataFrame:
     # Add absent AUs fillled with -1
     for au in absent_aus:
         au_df[au] = -1
-    au_df = au_df[aus]
+    au_df = au_df[aus].astype(int)
     return au_df
         
 def helper_split_func(df:pd.DataFrame,split:str = 'train')->pd.DataFrame:
@@ -126,6 +127,7 @@ def helper_split_func(df:pd.DataFrame,split:str = 'train')->pd.DataFrame:
         print(np.sort(df.participant.unique().tolist()))
     else:
         df = df[~df['participant'].isin(participants)]
-        df = df.sample(frac=1)
+        #df = df.sample(frac=1,random_state=42)
         print(np.sort(df.participant.unique().tolist()))
+        print(len(df))
     return df

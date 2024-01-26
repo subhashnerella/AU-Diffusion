@@ -45,7 +45,7 @@ def main():
     parser.add_argument(
                         "--config",
                         type=str,
-                        default="scripts/infconfig/AU-ldm-vq.yaml",
+                        default="configs/latent-diffusion/AU-ldm-vq.yaml",
                         help="path to config which constructs model",
                         )
     parser.add_argument(
@@ -70,7 +70,7 @@ def main():
     parser.add_argument(
                         "--ckpt",
                         type=str,
-                        default="logs/2023-06-23T23-55-11_AU-ldm-vq/checkpoints/last.ckpt",
+                        default="logs/2023-10-29T00-59-03_AU-ldm-vq/checkpoints/last.ckpt",
                         help="path to checkpoint of model",
                         )
     parser.add_argument(
@@ -103,13 +103,7 @@ def main():
                         default=1,
                         help="sample this often",
                         )
-    parser.add_argument(
-                        "--precision",
-                        type=str,
-                        help="evaluate at this precision",
-                        choices=["full", "autocast"],
-                        default="autocast"
-                        )
+
 
 
     opt = parser.parse_args()
@@ -141,7 +135,7 @@ def main():
     init_image = torch.tensor(data['image'],device=device).unsqueeze(0)
     
     aus = np.zeros((18))
-    aus[-4] = 1
+    aus[3] = 1
     aus = np.repeat(aus[None,:], batch_size, axis=0)
     aus = torch.tensor(aus).to(device)
     data['aus'] = aus

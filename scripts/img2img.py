@@ -45,7 +45,7 @@ def main():
     parser.add_argument(
                         "--config",
                         type=str,
-                        default="scripts/infconfig/AU-ldm-vq.yaml",
+                        default="configs/latent-diffusion/AU-ldm-vq.yaml",
                         help="path to config which constructs model",
                         )
     parser.add_argument(
@@ -70,7 +70,7 @@ def main():
     parser.add_argument(
                         "--ckpt",
                         type=str,
-                        default="logs/2023-06-23T23-55-11_AU-ldm-vq/checkpoints/last.ckpt",
+                        default="logs/2023-10-29T00-59-03_AU-ldm-vq/checkpoints/last.ckpt",
                         help="path to checkpoint of model",
                         )
     parser.add_argument(
