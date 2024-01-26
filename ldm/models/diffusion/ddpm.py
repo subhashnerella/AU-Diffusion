@@ -1317,7 +1317,7 @@ class LatentDiffusion(DDPM):
             with self.ema_scope("img2img"):
                 sampler = DDIMSampler(self)
                 sampler.make_schedule(ddim_num_steps=ddim_steps, ddim_eta=0, verbose=False)
-                strength = 1
+                strength = 0.25
                 t_start = int(strength*ddim_steps)
                 batch_size = z.shape[0]
                 z_enc = sampler.stochastic_encode(z,torch.tensor([t_start-1]*batch_size).to(self.device))
@@ -1367,11 +1367,11 @@ class LatentDiffusion(DDPM):
                 log["mask"] = mask
 
                 # outpaint
-                with self.ema_scope("Plotting Outpaint"):
-                    samples, _ = self.sample_log(cond=c, batch_size=N, ddim=use_ddim,eta=ddim_eta,
-                                                ddim_steps=ddim_steps, x0=z[:N], mask=mask)
-                x_samples = self.decode_first_stage(samples.to(self.device))
-                log["samples_outpainting"] = x_samples
+                # with self.ema_scope("Plotting Outpaint"):
+                #     samples, _ = self.sample_log(cond=c, batch_size=N, ddim=use_ddim,eta=ddim_eta,
+                #                                 ddim_steps=ddim_steps, x0=z[:N], mask=mask)
+                # x_samples = self.decode_first_stage(samples.to(self.device))
+                # log["samples_outpainting"] = x_samples
 
         if plot_progressive_rows:
             with self.ema_scope("Plotting Progressives"):

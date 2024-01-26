@@ -63,4 +63,8 @@ outputs/
 #env yaml
 *.yaml
 
+#images
+*.png
+*.jpg
+
 

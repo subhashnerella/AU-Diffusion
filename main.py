@@ -786,14 +786,14 @@ if __name__ == "__main__":
                     "clamp": True
                 }
             },
-            "PeriodicSave": {
-                "target": "main.PeriodicSave",
-                "params": {
-                    "batch_size": 12,
-                    "num_gpu_workers": len(trainer_config["gpus"].strip(",").split(",")),
-                    "num_imgs": 5000
-                }
-            },
+            # "PeriodicSave": {
+            #     "target": "main.PeriodicSave",
+            #     "params": {
+            #         "batch_size": 12,
+            #         "num_gpu_workers": len(trainer_config["gpus"].strip(",").split(",")),
+            #         "num_imgs": 5000
+            #     }
+            # },
             "learning_rate_logger": {
                 "target": "main.LearningRateMonitor",
                 "params": {
