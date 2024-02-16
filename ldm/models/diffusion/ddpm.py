@@ -37,9 +37,6 @@ def disabled_train(self, mode=True):
     return self
 
 
-def uniform_on_device(r1, r2, shape, device):
-    return (r1 - r2) * torch.rand(*shape, device=device) + r2
-
 
 class DDPM(pl.LightningModule):
     # classic DDPM with Gaussian diffusion, in image space
@@ -367,50 +364,6 @@ class DDPM(pl.LightningModule):
         if self.use_ema:
             self.model_ema(self.model)
 
-    def _get_rows_from_list(self, samples):
-        n_imgs_per_row = len(samples)
-        denoise_grid = rearrange(samples, 'n b c h w -> b n c h w')
-        denoise_grid = rearrange(denoise_grid, 'b n c h w -> (b n) c h w')
-        denoise_grid = make_grid(denoise_grid, nrow=n_imgs_per_row)
-        return denoise_grid
-
-    @torch.no_grad()
-    def log_images(self, batch, N=8, n_row=2, sample=True, return_keys=None, **kwargs):
-        log = dict()
-        x = self.get_input(batch, self.first_stage_key)
-        N = min(x.shape[0], N)
-        n_row = min(x.shape[0], n_row)
-        x = x.to(self.device)[:N]
-        log["inputs"] = x
-
-        # get diffusion row
-        diffusion_row = list()
-        x_start = x[:n_row]
-
-        for t in range(self.num_timesteps):
-            if t % self.log_every_t == 0 or t == self.num_timesteps - 1:
-                t = repeat(torch.tensor([t]), '1 -> b', b=n_row)
-                t = t.to(self.device).long()
-                noise = torch.randn_like(x_start)
-                x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
-                diffusion_row.append(x_noisy)
-
-        log["diffusion_row"] = self._get_rows_from_list(diffusion_row)
-
-        if sample:
-            # get denoise row
-            with self.ema_scope("Plotting"):
-                samples, denoise_row = self.sample(batch_size=N, return_intermediates=True)
-
-            log["samples"] = samples
-            log["denoise_row"] = self._get_rows_from_list(denoise_row)
-
-        if return_keys:
-            if np.intersect1d(list(log.keys()), return_keys).shape[0] == 0:
-                return log
-            else:
-                return {key: log[key] for key in return_keys}
-        return log
 
     def configure_optimizers(self):
         lr = self.learning_rate
@@ -460,8 +413,7 @@ class LatentDiffusion(DDPM):
         self.instantiate_first_stage(first_stage_config)
         self.instantiate_cond_stage(cond_stage_config)
         self.cond_stage_forward = cond_stage_forward
-        self.clip_denoised = False
-        self.bbox_tokenizer = None  
+
 
         self.restarted_from_ckpt = False
         if ckpt_path is not None:
@@ -561,95 +513,6 @@ class LatentDiffusion(DDPM):
             c = getattr(self.cond_stage_model, self.cond_stage_forward)(c)
         return c
 
-    def meshgrid(self, h, w):
-        y = torch.arange(0, h).view(h, 1, 1).repeat(1, w, 1)
-        x = torch.arange(0, w).view(1, w, 1).repeat(h, 1, 1)
-
-        arr = torch.cat([y, x], dim=-1)
-        return arr
-
-    def delta_border(self, h, w):
-        """
-        :param h: height
-        :param w: width
-        :return: normalized distance to image border,
-         wtith min distance = 0 at border and max dist = 0.5 at image center
-        """
-        lower_right_corner = torch.tensor([h - 1, w - 1]).view(1, 1, 2)
-        arr = self.meshgrid(h, w) / lower_right_corner
-        dist_left_up = torch.min(arr, dim=-1, keepdims=True)[0]
-        dist_right_down = torch.min(1 - arr, dim=-1, keepdims=True)[0]
-        edge_dist = torch.min(torch.cat([dist_left_up, dist_right_down], dim=-1), dim=-1)[0]
-        return edge_dist
-
-    def get_weighting(self, h, w, Ly, Lx, device):
-        weighting = self.delta_border(h, w)
-        weighting = torch.clip(weighting, self.split_input_params["clip_min_weight"],
-                               self.split_input_params["clip_max_weight"], )
-        weighting = weighting.view(1, h * w, 1).repeat(1, 1, Ly * Lx).to(device)
-
-        if self.split_input_params["tie_braker"]:
-            L_weighting = self.delta_border(Ly, Lx)
-            L_weighting = torch.clip(L_weighting,
-                                     self.split_input_params["clip_min_tie_weight"],
-                                     self.split_input_params["clip_max_tie_weight"])
-
-            L_weighting = L_weighting.view(1, 1, Ly * Lx).to(device)
-            weighting = weighting * L_weighting
-        return weighting
-
-    def get_fold_unfold(self, x, kernel_size, stride, uf=1, df=1):  # todo load once not every time, shorten code
-        """
-        :param x: img of size (bs, c, h, w)
-        :return: n img crops of size (n, bs, c, kernel_size[0], kernel_size[1])
-        """
-        bs, nc, h, w = x.shape
-
-        # number of crops in image
-        Ly = (h - kernel_size[0]) // stride[0] + 1
-        Lx = (w - kernel_size[1]) // stride[1] + 1
-
-        if uf == 1 and df == 1:
-            fold_params = dict(kernel_size=kernel_size, dilation=1, padding=0, stride=stride)
-            unfold = torch.nn.Unfold(**fold_params)
-
-            fold = torch.nn.Fold(output_size=x.shape[2:], **fold_params)
-
-            weighting = self.get_weighting(kernel_size[0], kernel_size[1], Ly, Lx, x.device).to(x.dtype)
-            normalization = fold(weighting).view(1, 1, h, w)  # normalizes the overlap
-            weighting = weighting.view((1, 1, kernel_size[0], kernel_size[1], Ly * Lx))
-
-        elif uf > 1 and df == 1:
-            fold_params = dict(kernel_size=kernel_size, dilation=1, padding=0, stride=stride)
-            unfold = torch.nn.Unfold(**fold_params)
-
-            fold_params2 = dict(kernel_size=(kernel_size[0] * uf, kernel_size[0] * uf),
-                                dilation=1, padding=0,
-                                stride=(stride[0] * uf, stride[1] * uf))
-            fold = torch.nn.Fold(output_size=(x.shape[2] * uf, x.shape[3] * uf), **fold_params2)
-
-            weighting = self.get_weighting(kernel_size[0] * uf, kernel_size[1] * uf, Ly, Lx, x.device).to(x.dtype)
-            normalization = fold(weighting).view(1, 1, h * uf, w * uf)  # normalizes the overlap
-            weighting = weighting.view((1, 1, kernel_size[0] * uf, kernel_size[1] * uf, Ly * Lx))
-
-        elif df > 1 and uf == 1:
-            fold_params = dict(kernel_size=kernel_size, dilation=1, padding=0, stride=stride)
-            unfold = torch.nn.Unfold(**fold_params)
-
-            fold_params2 = dict(kernel_size=(kernel_size[0] // df, kernel_size[0] // df),
-                                dilation=1, padding=0,
-                                stride=(stride[0] // df, stride[1] // df))
-            fold = torch.nn.Fold(output_size=(x.shape[2] // df, x.shape[3] // df), **fold_params2)
-
-            weighting = self.get_weighting(kernel_size[0] // df, kernel_size[1] // df, Ly, Lx, x.device).to(x.dtype)
-            normalization = fold(weighting).view(1, 1, h // df, w // df)  # normalizes the overlap
-            weighting = weighting.view((1, 1, kernel_size[0] // df, kernel_size[1] // df, Ly * Lx))
-
-        else:
-            raise NotImplementedError
-
-        return fold, unfold, normalization, weighting
-
     @torch.no_grad()
     def get_input(self, batch, k, return_first_stage_outputs=False, force_c_encode=False,
                   cond_key=None, return_original_cond=False, bs=None):
@@ -714,155 +577,15 @@ class LatentDiffusion(DDPM):
 
         z = 1. / self.scale_factor * z
 
-        if hasattr(self, "split_input_params"):
-            if self.split_input_params["patch_distributed_vq"]:
-                ks = self.split_input_params["ks"]  # eg. (128, 128)
-                stride = self.split_input_params["stride"]  # eg. (64, 64)
-                uf = self.split_input_params["vqf"]
-                bs, nc, h, w = z.shape
-                if ks[0] > h or ks[1] > w:
-                    ks = (min(ks[0], h), min(ks[1], w))
-                    print("reducing Kernel")
 
-                if stride[0] > h or stride[1] > w:
-                    stride = (min(stride[0], h), min(stride[1], w))
-                    print("reducing stride")
-
-                fold, unfold, normalization, weighting = self.get_fold_unfold(z, ks, stride, uf=uf)
-
-                z = unfold(z)  # (bn, nc * prod(**ks), L)
-                # 1. Reshape to img shape
-                z = z.view((z.shape[0], -1, ks[0], ks[1], z.shape[-1]))  # (bn, nc, ks[0], ks[1], L )
-
-                # 2. apply model loop over last dim
-                if isinstance(self.first_stage_model, VQModelInterface):
-                    output_list = [self.first_stage_model.decode(z[:, :, :, :, i],
-                                                                 force_not_quantize=predict_cids or force_not_quantize)
-                                   for i in range(z.shape[-1])]
-                else:
-
-                    output_list = [self.first_stage_model.decode(z[:, :, :, :, i])
-                                   for i in range(z.shape[-1])]
-
-                o = torch.stack(output_list, axis=-1)  # # (bn, nc, ks[0], ks[1], L)
-                o = o * weighting
-                # Reverse 1. reshape to img shape
-                o = o.view((o.shape[0], -1, o.shape[-1]))  # (bn, nc * ks[0] * ks[1], L)
-                # stitch crops together
-                decoded = fold(o)
-                decoded = decoded / normalization  # norm is shape (1, 1, h, w)
-                return decoded
-            else:
-                if isinstance(self.first_stage_model, VQModelInterface):
-                    return self.first_stage_model.decode(z, force_not_quantize=predict_cids or force_not_quantize)
-                else:
-                    return self.first_stage_model.decode(z)
-
+        if isinstance(self.first_stage_model, VQModelInterface):
+            return self.first_stage_model.decode(z, force_not_quantize=predict_cids or force_not_quantize)
         else:
-            if isinstance(self.first_stage_model, VQModelInterface):
-                return self.first_stage_model.decode(z, force_not_quantize=predict_cids or force_not_quantize)
-            else:
-                return self.first_stage_model.decode(z)
-
-    # same as above but without decorator
-    def differentiable_decode_first_stage(self, z, predict_cids=False, force_not_quantize=False):
-        if predict_cids:
-            if z.dim() == 4:
-                z = torch.argmax(z.exp(), dim=1).long()
-            z = self.first_stage_model.quantize.get_codebook_entry(z, shape=None)
-            z = rearrange(z, 'b h w c -> b c h w').contiguous()
-
-        z = 1. / self.scale_factor * z
-
-        if hasattr(self, "split_input_params"):
-            if self.split_input_params["patch_distributed_vq"]:
-                ks = self.split_input_params["ks"]  # eg. (128, 128)
-                stride = self.split_input_params["stride"]  # eg. (64, 64)
-                uf = self.split_input_params["vqf"]
-                bs, nc, h, w = z.shape
-                if ks[0] > h or ks[1] > w:
-                    ks = (min(ks[0], h), min(ks[1], w))
-                    print("reducing Kernel")
-
-                if stride[0] > h or stride[1] > w:
-                    stride = (min(stride[0], h), min(stride[1], w))
-                    print("reducing stride")
-
-                fold, unfold, normalization, weighting = self.get_fold_unfold(z, ks, stride, uf=uf)
-
-                z = unfold(z)  # (bn, nc * prod(**ks), L)
-                # 1. Reshape to img shape
-                z = z.view((z.shape[0], -1, ks[0], ks[1], z.shape[-1]))  # (bn, nc, ks[0], ks[1], L )
-
-                # 2. apply model loop over last dim
-                if isinstance(self.first_stage_model, VQModelInterface):  
-                    output_list = [self.first_stage_model.decode(z[:, :, :, :, i],
-                                                                 force_not_quantize=predict_cids or force_not_quantize)
-                                   for i in range(z.shape[-1])]
-                else:
-
-                    output_list = [self.first_stage_model.decode(z[:, :, :, :, i])
-                                   for i in range(z.shape[-1])]
-
-                o = torch.stack(output_list, axis=-1)  # # (bn, nc, ks[0], ks[1], L)
-                o = o * weighting
-                # Reverse 1. reshape to img shape
-                o = o.view((o.shape[0], -1, o.shape[-1]))  # (bn, nc * ks[0] * ks[1], L)
-                # stitch crops together
-                decoded = fold(o)
-                decoded = decoded / normalization  # norm is shape (1, 1, h, w)
-                return decoded
-            else:
-                if isinstance(self.first_stage_model, VQModelInterface):
-                    return self.first_stage_model.decode(z, force_not_quantize=predict_cids or force_not_quantize)
-                else:
-                    return self.first_stage_model.decode(z)
-
-        else:
-            if isinstance(self.first_stage_model, VQModelInterface):
-                return self.first_stage_model.decode(z, force_not_quantize=predict_cids or force_not_quantize)
-            else:
-                return self.first_stage_model.decode(z)
+            return self.first_stage_model.decode(z)
 
     @torch.no_grad()
     def encode_first_stage(self, x):
-        if hasattr(self, "split_input_params"):
-            if self.split_input_params["patch_distributed_vq"]:
-                ks = self.split_input_params["ks"]  # eg. (128, 128)
-                stride = self.split_input_params["stride"]  # eg. (64, 64)
-                df = self.split_input_params["vqf"]
-                self.split_input_params['original_image_size'] = x.shape[-2:]
-                bs, nc, h, w = x.shape
-                if ks[0] > h or ks[1] > w:
-                    ks = (min(ks[0], h), min(ks[1], w))
-                    print("reducing Kernel")
-
-                if stride[0] > h or stride[1] > w:
-                    stride = (min(stride[0], h), min(stride[1], w))
-                    print("reducing stride")
-
-                fold, unfold, normalization, weighting = self.get_fold_unfold(x, ks, stride, df=df)
-                z = unfold(x)  # (bn, nc * prod(**ks), L)
-                # Reshape to img shape
-                z = z.view((z.shape[0], -1, ks[0], ks[1], z.shape[-1]))  # (bn, nc, ks[0], ks[1], L )
-
-                output_list = [self.first_stage_model.encode(z[:, :, :, :, i])
-                               for i in range(z.shape[-1])]
-
-                o = torch.stack(output_list, axis=-1)
-                o = o * weighting
-
-                # Reverse reshape to img shape
-                o = o.view((o.shape[0], -1, o.shape[-1]))  # (bn, nc * ks[0] * ks[1], L)
-                # stitch crops together
-                decoded = fold(o)
-                decoded = decoded / normalization
-                return decoded
-
-            else:
-                return self.first_stage_model.encode(x)
-        else:
-            return self.first_stage_model.encode(x)
+         return self.first_stage_model.encode(x)
 
     def shared_step(self, batch, **kwargs):
         x, c = self.get_input(batch, self.first_stage_key)
@@ -880,16 +603,6 @@ class LatentDiffusion(DDPM):
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
         return self.p_losses(x, c, t, *args, **kwargs)
 
-    def _rescale_annotations(self, bboxes, crop_coordinates):  # TODO: move to dataset
-        def rescale_bbox(bbox):
-            x0 = clamp((bbox[0] - crop_coordinates[0]) / crop_coordinates[2])
-            y0 = clamp((bbox[1] - crop_coordinates[1]) / crop_coordinates[3])
-            w = min(bbox[2] / crop_coordinates[2], 1 - x0)
-            h = min(bbox[3] / crop_coordinates[3], 1 - y0)
-            return x0, y0, w, h
-
-        return [rescale_bbox(b) for b in bboxes]
-
     def apply_model(self, x_noisy, t, cond, return_ids=False):
 
         if isinstance(cond, dict):
@@ -905,93 +618,9 @@ class LatentDiffusion(DDPM):
             key = 'c_concat' if self.model.conditioning_key == 'concat' else 'c_crossattn'
             cond = {key: cond}
 
-        if hasattr(self, "split_input_params"):
-            assert len(cond) == 1  # todo can only deal with one conditioning atm
-            assert not return_ids  
-            ks = self.split_input_params["ks"]  # eg. (128, 128)
-            stride = self.split_input_params["stride"]  # eg. (64, 64)
 
-            h, w = x_noisy.shape[-2:]
-
-            fold, unfold, normalization, weighting = self.get_fold_unfold(x_noisy, ks, stride)
-
-            z = unfold(x_noisy)  # (bn, nc * prod(**ks), L)
-            # Reshape to img shape
-            z = z.view((z.shape[0], -1, ks[0], ks[1], z.shape[-1]))  # (bn, nc, ks[0], ks[1], L )
-            z_list = [z[:, :, :, :, i] for i in range(z.shape[-1])]
-
-            if self.cond_stage_key in ["image", "LR_image", "segmentation",
-                                       'bbox_img'] and self.model.conditioning_key:  # todo check for completeness
-                c_key = next(iter(cond.keys()))  # get key
-                c = next(iter(cond.values()))  # get value
-                assert (len(c) == 1)  # todo extend to list with more than one elem
-                c = c[0]  # get element
-
-                c = unfold(c)
-                c = c.view((c.shape[0], -1, ks[0], ks[1], c.shape[-1]))  # (bn, nc, ks[0], ks[1], L )
-
-                cond_list = [{c_key: [c[:, :, :, :, i]]} for i in range(c.shape[-1])]
-
-            elif self.cond_stage_key == 'coordinates_bbox':
-                assert 'original_image_size' in self.split_input_params, 'BoudingBoxRescaling is missing original_image_size'
-
-                # assuming padding of unfold is always 0 and its dilation is always 1
-                n_patches_per_row = int((w - ks[0]) / stride[0] + 1)
-                full_img_h, full_img_w = self.split_input_params['original_image_size']
-                # as we are operating on latents, we need the factor from the original image size to the
-                # spatial latent size to properly rescale the crops for regenerating the bbox annotations
-                num_downs = self.first_stage_model.encoder.num_resolutions - 1
-                rescale_latent = 2 ** (num_downs)
-
-                # get top left postions of patches as conforming for the bbbox tokenizer, therefore we
-                # need to rescale the tl patch coordinates to be in between (0,1)
-                tl_patch_coordinates = [(rescale_latent * stride[0] * (patch_nr % n_patches_per_row) / full_img_w,
-                                         rescale_latent * stride[1] * (patch_nr // n_patches_per_row) / full_img_h)
-                                        for patch_nr in range(z.shape[-1])]
-
-                # patch_limits are tl_coord, width and height coordinates as (x_tl, y_tl, h, w)
-                patch_limits = [(x_tl, y_tl,
-                                 rescale_latent * ks[0] / full_img_w,
-                                 rescale_latent * ks[1] / full_img_h) for x_tl, y_tl in tl_patch_coordinates]
-                # patch_values = [(np.arange(x_tl,min(x_tl+ks, 1.)),np.arange(y_tl,min(y_tl+ks, 1.))) for x_tl, y_tl in tl_patch_coordinates]
-
-                # tokenize crop coordinates for the bounding boxes of the respective patches
-                patch_limits_tknzd = [torch.LongTensor(self.bbox_tokenizer._crop_encoder(bbox))[None].to(self.device)
-                                      for bbox in patch_limits]  # list of length l with tensors of shape (1, 2)
-                print(patch_limits_tknzd[0].shape)
-                # cut tknzd crop position from conditioning
-                assert isinstance(cond, dict), 'cond must be dict to be fed into model'
-                cut_cond = cond['c_crossattn'][0][..., :-2].to(self.device)
-                print(cut_cond.shape)
-
-                adapted_cond = torch.stack([torch.cat([cut_cond, p], dim=1) for p in patch_limits_tknzd])
-                adapted_cond = rearrange(adapted_cond, 'l b n -> (l b) n')
-                print(adapted_cond.shape)
-                adapted_cond = self.get_learned_conditioning(adapted_cond)
-                print(adapted_cond.shape)
-                adapted_cond = rearrange(adapted_cond, '(l b) n d -> l b n d', l=z.shape[-1])
-                print(adapted_cond.shape)
-
-                cond_list = [{'c_crossattn': [e]} for e in adapted_cond]
-
-            else:
-                cond_list = [cond for i in range(z.shape[-1])]  # Todo make this more efficient
-
-            # apply model by loop over crops
-            output_list = [self.model(z_list[i], t, **cond_list[i]) for i in range(z.shape[-1])]
-            assert not isinstance(output_list[0],
-                                  tuple)  # todo cant deal with multiple model outputs check this never happens
-
-            o = torch.stack(output_list, axis=-1)
-            o = o * weighting
-            # Reverse reshape to img shape
-            o = o.view((o.shape[0], -1, o.shape[-1]))  # (bn, nc * ks[0] * ks[1], L)
-            # stitch crops together
-            x_recon = fold(o) / normalization
-
-        else:
-            #x_recon = self.model(x_noisy, t, **cond)
-            x_recon = self.model(x_noisy, t, cond)
+        #x_recon = self.model(x_noisy, t, **cond)
+        x_recon = self.model(x_noisy, t, cond)
 
         if isinstance(x_recon, tuple) and not return_ids:
             return x_recon[0]
@@ -1002,19 +631,6 @@ class LatentDiffusion(DDPM):
         return (extract_into_tensor(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t - pred_xstart) / \
                extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape)
 
-    def _prior_bpd(self, x_start):
-        """
-        Get the prior KL term for the variational lower-bound, measured in
-        bits-per-dim.
-        This term can't be optimized, as it only depends on the encoder.
-        :param x_start: the [N x C x ...] tensor of inputs.
-        :return: a batch of [N] KL values (in bits), one per batch element.
-        """
-        batch_size = x_start.shape[0]
-        t = torch.tensor([self.num_timesteps - 1] * batch_size, device=x_start.device)
-        qt_mean, _, qt_log_variance = self.q_mean_variance(x_start, t)
-        kl_prior = normal_kl(mean1=qt_mean, logvar1=qt_log_variance, mean2=0.0, logvar2=0.0)
-        return mean_flat(kl_prior) / np.log(2.0)
 
     def p_losses(self, x_start, cond, t, noise=None):
         noise = default(noise, lambda: torch.randn_like(x_start))
@@ -1092,10 +708,8 @@ class LatentDiffusion(DDPM):
                                        quantize_denoised=quantize_denoised,
                                        return_x0=return_x0,
                                        score_corrector=score_corrector, corrector_kwargs=corrector_kwargs)
-        if return_codebook_ids:
-            raise DeprecationWarning("Support dropped.")
-            model_mean, _, model_log_variance, logits = outputs
-        elif return_x0:
+
+        if return_x0:
             model_mean, _, model_log_variance, x0 = outputs
         else:
             model_mean, _, model_log_variance = outputs
@@ -1106,8 +720,6 @@ class LatentDiffusion(DDPM):
         # no noise when t == 0
         nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
 
-        if return_codebook_ids:
-            return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise, logits.argmax(dim=1)
         if return_x0:
             return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise, x0
         else:
@@ -1454,26 +1066,3 @@ class DiffusionWrapper(pl.LightningModule):
 
         return out
 
-
-class Layout2ImgDiffusion(LatentDiffusion):
-    # TODO: move all layout-specific hacks to this class
-    def __init__(self, cond_stage_key, *args, **kwargs):
-        assert cond_stage_key == 'coordinates_bbox', 'Layout2ImgDiffusion only for cond_stage_key="coordinates_bbox"'
-        super().__init__(cond_stage_key=cond_stage_key, *args, **kwargs)
-
-    def log_images(self, batch, N=8, *args, **kwargs):
-        logs = super().log_images(batch=batch, N=N, *args, **kwargs)
-
-        key = 'train' if self.training else 'validation'
-        dset = self.trainer.datamodule.datasets[key]
-        mapper = dset.conditional_builders[self.cond_stage_key]
-
-        bbox_imgs = []
-        map_fn = lambda catno: dset.get_textual_label(dset.get_category_id(catno))
-        for tknzd_bbox in batch[self.cond_stage_key][:N]:
-            bboximg = mapper.plot(tknzd_bbox.detach().cpu(), map_fn, (256, 256))
-            bbox_imgs.append(bboximg)
-
-        cond_img = torch.stack(bbox_imgs, dim=0)
-        logs['bbox_image'] = cond_img
-        return logs
