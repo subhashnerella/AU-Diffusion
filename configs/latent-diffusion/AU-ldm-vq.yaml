@@ -21,7 +21,7 @@ model:
         image_size: 64
         in_channels: 3
         out_channels: 3
-        model_channels: 224
+        model_channels: 256
         attention_resolutions:
         #note: this isn\t actually the resolution but
         # the downsampling factor, i.e. this corresnponds to
@@ -45,7 +45,7 @@ model:
       params:
         embed_dim: 3
         n_embed: 8192
-        ckpt_path: Downloaded_checkpoints/VQ/VQ_AU_Epoch14.ckpt
+        ckpt_path: Downloaded_checkpoints/VQ/VQ_10282023.ckpt
         ddconfig:
           double_z: false
           z_channels: 3
@@ -74,19 +74,20 @@ data:
   params:
     batch_size: 10
     num_workers: 6
-    shuffle_val_dataloader: True
     train:
-      target: ldm.data.dataset.MultiDatasetTrain
+      target: ldm.data.dataset.MultiDataset
       params:
-        datasets: ['BP4D', 'DISFA']
+        datasets: ['BP4D', 'DISFA','UNBC','BP4DPlus']
+        split: train
         aus: ['AU1', 'AU2', 'AU4', 'AU6', 'AU7', 'AU9', 'AU10','AU12', 'AU14', 'AU15', 'AU17','AU20', 'AU23', 'AU24', 'AU25','AU26','AU27','AU43']
         size: 256
         mcManager: True
         
     validation:
-      target: ldm.data.dataset.MultiDatasetVal
+      target: ldm.data.dataset.MultiDataset
       params:
-        datasets: ['BP4D', 'DISFA']
+        datasets: ['BP4D', 'DISFA', 'UNBC','BP4DPlus']
+        split: val
         aus: ['AU1', 'AU2', 'AU4', 'AU6', 'AU7', 'AU9', 'AU10','AU12', 'AU14', 'AU15', 'AU17','AU20', 'AU23', 'AU24', 'AU25','AU26','AU27','AU43']
         size: 256
         mcManager: True
@@ -98,12 +99,12 @@ lightning:
       target: main.ImageLogger
       params:
         batch_frequency:
-          train: 5000
-          val: 1800
+          train: 4000
+          val: 1500
         max_images: 4
         increase_log_steps: False
         log_on_batch_idx: True
 
   trainer:
-    max_epochs: 50
+    max_epochs: 10
     benchmark: True

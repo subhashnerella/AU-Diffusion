@@ -63,6 +63,14 @@ outputs/
 #script
 **/*.sh
 
+#run logs
+*.txt
 
+#env yaml
+*.yaml
+
+#images
+*.png
+*.jpg
 
 
