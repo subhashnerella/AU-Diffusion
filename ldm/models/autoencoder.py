@@ -282,6 +282,22 @@ class VQModelInterface(VQModel):
         return dec
 
 
+class VQModelInterfaceSampling(VQModel):
+    def __init__(self, embed_dim, *args, **kwargs):
+        super().__init__(embed_dim=embed_dim, *args, **kwargs)
+        self.embed_dim = embed_dim
+
+    def decode(self, h, force_not_quantize=False):
+        # also go through quantization layer
+        if not force_not_quantize:
+            quant, emb_loss, info = self.quantize(h)
+        else:
+            quant = h
+        quant = self.post_quant_conv(quant)
+        dec = self.decoder(quant)
+        return dec
+
+
 class AutoencoderKL(pl.LightningModule):
     def __init__(self,
                  ddconfig,
