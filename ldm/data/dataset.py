@@ -22,6 +22,7 @@ class FacesBase(Dataset):
         return sample
 
 
+
 class BP4D(FacesBase):
     def __init__(self,aus,split=None,size=225,mcManager=None):
         super().__init__()
@@ -114,7 +115,9 @@ def helper_AU_func(df:pd.DataFrame,aus:list)->pd.DataFrame:
     # Add absent AUs fillled with -1
     for au in absent_aus:
         au_df[au] = -1
+
     au_df = au_df[aus].astype(int)
+
     return au_df
         
 def helper_split_func(df:pd.DataFrame,split:str = 'train')->pd.DataFrame:

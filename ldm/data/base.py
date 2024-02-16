@@ -27,7 +27,9 @@ class ConcatDatasetWithIndex(ConcatDataset):
 
 
 class ImagePaths(Dataset):
+
     def __init__(self,  paths, aus, landmark_paths=None, keys=None, size=225, mcManager=None):
+
         self.size = size
         self.keys = dict() if keys is None else keys
         self.keys["file_path_"] = paths
